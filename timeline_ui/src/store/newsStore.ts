@@ -51,46 +51,8 @@ interface NewsState {
   setSearchQuery: (query: string) => void
 }
 
-// 模拟数据（开发用，后续替换为真实 API）
-const MOCK_NEWS: NewsItem[] = [
-  {
-    id: 1,
-    title: 'Claude Opus 4.7 正式发布',
-    platform_name: 'Anthropic Newsroom',
-    rank: 1,
-    url: 'https://www.anthropic.com/news/claude-4-7',
-    first_crawl_time: '2026-04-20 22:45:00',
-    last_crawl_time: '2026-04-20 22:45:00',
-    crawl_count: 1,
-    ai_tags: ['Agent', 'Anthropic', '模型发布', '编码'],
-    ai_heat_score: 85,
-    ai_reason: '开发者可将最难的编码任务完全托管，无需紧盯也能高质量交付',
-    event_id: 1,
-    related_count: 10,
-    is_bookmarked: false,
-  },
-  {
-    id: 2,
-    title: 'Qwen3.6-35B-A3B：具有能动编码能力的模型',
-    platform_name: 'Hacker News',
-    rank: 3,
-    url: 'https://news.ycombinator.com/',
-    first_crawl_time: '2026-04-20 22:32:00',
-    last_crawl_time: '2026-04-20 22:32:00',
-    crawl_count: 1,
-    ai_tags: ['Agent', '模型发布', '编码', '开源'],
-    ai_heat_score: 80,
-    ai_reason: '阿里开源 35B 代码专用模型，Agentic 编程能力可直接上手体验',
-    event_id: 2,
-    related_count: 1,
-    is_bookmarked: false,
-  },
-]
-
-// API 配置
-// API 配置
-// 开发模式使用 localhost，生产模式使用相对路径
-const API_BASE_URL = import.meta.env.DEV 
+// API 配置 - 开发和生产环境自适应
+const API_BASE_URL = (import.meta as any).env?.DEV 
   ? 'http://localhost:3333/api/timeline' 
   : '/api/timeline'
 
