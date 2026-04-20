@@ -282,10 +282,11 @@ if __name__ == '__main__':
     parser.add_argument('--db', type=str, default='data/trendradar.db', help='数据库路径')
     parser.add_argument('--host', type=str, default='0.0.0.0', help='监听地址')
     parser.add_argument('--port', type=int, default=8001, help='监听端口')
+    parser.add_argument('--serve-static', action='store_true', help='提供静态资源（生产模式）')
     
     args = parser.parse_args()
     
-    app = create_timeline_app(args.db)
+    app = create_timeline_app(args.db, serve_static=args.serve_static)
     
     print(f"[Timeline API] 启动服务：http://{args.host}:{args.port}")
     print("  GET  /api/timeline/news    - 获取新闻列表")

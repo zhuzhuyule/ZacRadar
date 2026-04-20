@@ -1208,27 +1208,33 @@ def run_server(
         # HTTP 模式（生产推荐）
         # 挂载 Timeline API 路由和静态资源
         try:
-            from .timeline_api import router as timeline_router
+            from .timeline_api import create_timeline_app
             from fastapi.staticfiles import StaticFiles
             from pathlib import Path
             
-            # 获取 FastAPI app 实例（FastMCP 2.0 支持）
-            if hasattr(mcp, 'app'):
-                app = mcp.app
-                
-                # 挂载 Timeline API 路由
-                app.include_router(timeline_router, prefix="/api")
-                print(f"  Timeline API: http://{host}:{port}/api/timeline/*")
-                
-                # 挂载静态资源（前端 UI）
-                static_path = Path(__file__).parent.parent / 'timeline_ui' / 'dist'
-                if static_path.exists():
-                    app.mount("/", StaticFiles(directory=str(static_path), html=True), name="static")
-                    print(f"  Frontend UI: http://{host}:{port}/ (静态资源：{static_path})")
-                else:
-                    print(f"  提示：前端未构建，运行：cd timeline_ui && npm run build")
+            # 创建 Timeline API 应用（包含静态资源）
+            static_path = Path(__file__).parent.parent / 'timeline_ui' / 'dist'
+            if static_path.exists():
+                timeline_app = create_timeline_app(serve_static=False)
+                # 挂载静态资源
+                timeline_app.mount("/", StaticFiles(directory=str(static_path), html=True), name="static")
+                print(f"  Frontend UI: http://{host}:{port}/ (静态资源：{static_path})")
+            else:
+                timeline_app = create_timeline_app(serve_static=False)
+                print(f"  提示：前端未构建，运行：cd timeline_ui && npm run build")
+            
+            print(f"  Timeline API: http://{host}:{port}/api/timeline/*")
+            
+            # 将 Timeline app 挂载到 MCP 服务器
+            # 需要获取 MCP 的 FastAPI app
+            if hasattr(mcp, 'http_app'):
+                mcp_app = mcp.http_app()
+                # Starlette 应用挂载子应用
+                mcp_app.mount("/api/timeline", timeline_app)
         except Exception as e:
+            import traceback
             print(f"  警告：扩展功能加载失败：{e}")
+            traceback.print_exc()
         
         mcp.run(
             transport='http',

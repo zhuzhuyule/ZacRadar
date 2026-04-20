@@ -53,8 +53,8 @@ interface NewsState {
 
 // API 配置 - 开发和生产环境自适应
 const API_BASE_URL = (import.meta as any).env?.DEV 
-  ? 'http://localhost:3333/api/timeline' 
-  : '/api/timeline'
+  ? 'http://localhost:8001/api/timeline'  // 开发模式直接连接 API 服务器
+  : '/api/timeline'  // 生产模式使用相对路径（由 MCP 服务器代理）
 
 export const useNewsStore = create<NewsState>((set, get) => ({
   // 初始状态
