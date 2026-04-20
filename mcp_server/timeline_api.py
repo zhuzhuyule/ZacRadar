@@ -2,7 +2,7 @@
 """
 Timeline API 扩展模块
 
-为 TrendRadar 提供 AI Timeline 相关的 API 端点
+为 TrendRadar 提供 AI Timeline 相关的 API 端点和静态资源服务
 可嵌入 HTTP 模式的 MCP 服务器或独立运行
 """
 
@@ -12,7 +12,8 @@ import os
 from pathlib import Path
 from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 
 # 创建 APIRouter
@@ -228,12 +229,13 @@ async def toggle_bookmark(news_id: int, user_id: str = "default"):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def create_timeline_app(db_path: Optional[str] = None):
+def create_timeline_app(db_path: Optional[str] = None, serve_static: bool = False):
     """
     创建独立的 Timeline API 应用（用于开发测试）
     
     Args:
         db_path: 数据库路径（可选）
+        serve_static: 是否提供静态资源（默认 False）
     
     Returns:
         FastAPI 应用实例
@@ -257,8 +259,17 @@ def create_timeline_app(db_path: Optional[str] = None):
     if db_path:
         _service = TimelineDataService(db_path)
     
-    # 注册路由
+    # 注册 API 路由
     app.include_router(router)
+    
+    # 提供静态资源（生产环境）
+    if serve_static:
+        static_path = Path(__file__).parent.parent / 'timeline_ui' / 'dist'
+        if static_path.exists():
+            app.mount("/", StaticFiles(directory=str(static_path), html=True), name="static")
+            print(f"[Timeline API] 静态资源目录：{static_path}")
+        else:
+            print(f"[Timeline API] 警告：静态资源目录不存在：{static_path}")
     
     return app
 

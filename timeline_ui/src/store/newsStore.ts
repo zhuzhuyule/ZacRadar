@@ -88,7 +88,11 @@ const MOCK_NEWS: NewsItem[] = [
 ]
 
 // API 配置
-const API_BASE_URL = 'http://localhost:3333/api/timeline'
+// API 配置
+// 开发模式使用 localhost，生产模式使用相对路径
+const API_BASE_URL = import.meta.env.DEV 
+  ? 'http://localhost:3333/api/timeline' 
+  : '/api/timeline'
 
 export const useNewsStore = create<NewsState>((set, get) => ({
   // 初始状态

@@ -1206,16 +1206,29 @@ def run_server(
         mcp.run(transport='stdio')
     elif transport == 'http':
         # HTTP 模式（生产推荐）
-        # 挂载 Timeline API 路由
+        # 挂载 Timeline API 路由和静态资源
         try:
             from .timeline_api import router as timeline_router
+            from fastapi.staticfiles import StaticFiles
+            from pathlib import Path
             
             # 获取 FastAPI app 实例（FastMCP 2.0 支持）
             if hasattr(mcp, 'app'):
-                mcp.app.include_router(timeline_router, prefix="/api")
+                app = mcp.app
+                
+                # 挂载 Timeline API 路由
+                app.include_router(timeline_router, prefix="/api")
                 print(f"  Timeline API: http://{host}:{port}/api/timeline/*")
+                
+                # 挂载静态资源（前端 UI）
+                static_path = Path(__file__).parent.parent / 'timeline_ui' / 'dist'
+                if static_path.exists():
+                    app.mount("/", StaticFiles(directory=str(static_path), html=True), name="static")
+                    print(f"  Frontend UI: http://{host}:{port}/ (静态资源：{static_path})")
+                else:
+                    print(f"  提示：前端未构建，运行：cd timeline_ui && npm run build")
         except Exception as e:
-            print(f"  警告：Timeline API 加载失败：{e}")
+            print(f"  警告：扩展功能加载失败：{e}")
         
         mcp.run(
             transport='http',
