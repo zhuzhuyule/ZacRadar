@@ -3,6 +3,7 @@ TrendRadar MCP Server - FastMCP 2.0 实现
 
 使用 FastMCP 2.0 提供生产级 MCP 工具服务器。
 支持 stdio 和 HTTP 两种传输模式。
+HTTP 模式下同时提供 Timeline API 端点。
 """
 
 import asyncio
@@ -1205,6 +1206,17 @@ def run_server(
         mcp.run(transport='stdio')
     elif transport == 'http':
         # HTTP 模式（生产推荐）
+        # 挂载 Timeline API 路由
+        try:
+            from .timeline_api import router as timeline_router
+            
+            # 获取 FastAPI app 实例（FastMCP 2.0 支持）
+            if hasattr(mcp, 'app'):
+                mcp.app.include_router(timeline_router, prefix="/api")
+                print(f"  Timeline API: http://{host}:{port}/api/timeline/*")
+        except Exception as e:
+            print(f"  警告：Timeline API 加载失败：{e}")
+        
         mcp.run(
             transport='http',
             host=host,

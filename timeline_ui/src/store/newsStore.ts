@@ -87,6 +87,9 @@ const MOCK_NEWS: NewsItem[] = [
   },
 ]
 
+// API 配置
+const API_BASE_URL = 'http://localhost:3333/api/timeline'
+
 export const useNewsStore = create<NewsState>((set, get) => ({
   // 初始状态
   news: [],
@@ -103,27 +106,35 @@ export const useNewsStore = create<NewsState>((set, get) => ({
   fetchNews: async () => {
     set({ loading: true, error: null })
     try {
-      // 调用真实 API
-      const response = await fetch('http://localhost:8001/api/news')
-      const data = await response.json()
+      const { filter, selectedTag, searchQuery } = get()
+      
+      // 构建查询参数
+      const params = new URLSearchParams()
+      params.set('filter', filter)
+      if (selectedTag) params.set('tag', selectedTag)
+      if (searchQuery) params.set('search', searchQuery)
+      
+      const response = await fetch(`${API_BASE_URL}/news?${params}`)
+      const result = await response.json()
+      
+      if (!result.success) {
+        throw new Error(result.error || 'API 请求失败')
+      }
       
       set({
-        news: data,
-        sources: Array.from(new Set(data.map((n: NewsItem) => n.platform_name))),
+        news: result.data,
+        sources: Array.from(new Set(result.data.map((n: NewsItem) => n.platform_name))),
         loading: false,
       })
       
       // 获取统计数据
       get().fetchStatistics()
     } catch (error) {
-      // 如果 API 失败，使用模拟数据
-      console.warn('API 调用失败，使用模拟数据:', error)
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
+      console.error('获取新闻失败:', error)
       set({
-        news: MOCK_NEWS,
-        sources: Array.from(new Set(MOCK_NEWS.map(n => n.platform_name))),
+        news: [],
         loading: false,
+        error: error instanceof Error ? error.message : '未知错误',
       })
     }
   },
@@ -131,13 +142,14 @@ export const useNewsStore = create<NewsState>((set, get) => ({
   // 获取标签列表
   fetchTags: async () => {
     try {
-      // 优先从 API 获取
-      const response = await fetch('http://localhost:8001/api/tags')
-      const tags = await response.json()
-      set({ tags: tags })
+      const response = await fetch(`${API_BASE_URL}/tags`)
+      const result = await response.json()
+      if (result.success) {
+        set({ tags: result.data })
+      }
     } catch (error) {
-      console.error('Failed to fetch tags from API, extracting from news:', error)
-      // 如果 API 失败，从新闻数据中提取
+      console.error('获取标签失败:', error)
+      // 从新闻数据中提取
       const allTags = new Set<string>()
       get().news.forEach(n => n.ai_tags.forEach(tag => allTags.add(tag)))
       set({ tags: Array.from(allTags) })
@@ -147,27 +159,37 @@ export const useNewsStore = create<NewsState>((set, get) => ({
   // 获取统计数据
   fetchStatistics: async () => {
     try {
-      const response = await fetch('http://localhost:8001/api/stats')
-      const stats = await response.json()
-      set({ statistics: stats })
+      const response = await fetch(`${API_BASE_URL}/stats`)
+      const result = await response.json()
+      if (result.success) {
+        set({ statistics: result.data })
+      }
     } catch (error) {
-      console.error('Failed to fetch statistics:', error)
+      console.error('获取统计数据失败:', error)
     }
   },
 
   // 切换收藏状态
   toggleBookmark: async (newsId: number) => {
     try {
-      // TODO: 调用 API
-      // await fetch(`/api/news/${newsId}/bookmark`, { method: 'POST' })
+      const response = await fetch(`${API_BASE_URL}/bookmark/${newsId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: 'default' }),
+      })
+      const result = await response.json()
+      
+      if (!result.success) {
+        throw new Error(result.error || '操作失败')
+      }
       
       set(state => ({
         news: state.news.map(n =>
-          n.id === newsId ? { ...n, is_bookmarked: !n.is_bookmarked } : n
+          n.id === newsId ? { ...n, is_bookmarked: result.data.is_bookmarked } : n
         ),
       }))
     } catch (error) {
-      console.error('Failed to toggle bookmark:', error)
+      console.error('切换收藏失败:', error)
     }
   },
 
