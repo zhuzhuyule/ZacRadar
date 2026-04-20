@@ -2170,6 +2170,11 @@ def main():
         action="store_true",
         help="发送测试通知到已配置渠道"
     )
+    parser.add_argument(
+        "--timeline-server",
+        action="store_true",
+        help="启动 AI Timeline HTTP 服务（默认端口 8001）"
+    )
 
     args = parser.parse_args()
 
@@ -2195,6 +2200,11 @@ def main():
             ok = _run_test_notification(config)
             if not ok:
                 raise SystemExit(1)
+            return
+        
+        # 处理 Timeline 服务启动
+        if args.timeline_server:
+            _start_timeline_server(config)
             return
 
         version_url = config.get("VERSION_CHECK_URL", "")
@@ -2285,6 +2295,29 @@ def _handle_status_commands(config: Dict) -> None:
 
     # 清理资源
     ctx.cleanup()
+
+
+def _start_timeline_server(config: Dict) -> None:
+    """启动 AI Timeline HTTP 服务"""
+    from trendradar.timeline_server import create_timeline_server
+    
+    db_path = config.get("STORAGE", {}).get("SQLITE", {}).get("DB_PATH", "data/trendradar.db")
+    port = config.get("TIMELINE", {}).get("PORT", 8001)
+    host = config.get("TIMELINE", {}).get("HOST", "0.0.0.0")
+    
+    try:
+        server = create_timeline_server(db_path, host, port)
+        print(f"\n[Timeline Server] 服务地址：http://{host}:{port}")
+        print("[Timeline Server] 按 Ctrl+C 停止服务\n")
+        server.start(blocking=True)
+    except KeyboardInterrupt:
+        print("\n[Timeline Server] 服务已停止")
+    except FileNotFoundError as e:
+        print(f"❌ 数据库文件未找到：{e}")
+        print("\n请确保已运行过数据爬取，数据库文件存在。")
+    except Exception as e:
+        print(f"❌ 启动 Timeline 服务失败：{e}")
+        raise
 
 
 if __name__ == "__main__":

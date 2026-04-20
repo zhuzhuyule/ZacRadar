@@ -68,17 +68,23 @@ fi
 echo "✓ 前端依赖安装完成"
 
 echo ""
-echo "步骤 4/5: 启动 API 服务器..."
+echo "步骤 4/5: 启动 Timeline 服务..."
 
 cd ..
 
-# 后台启动 API 服务器
-python3 trendradar/timeline_api/data_loader.py &
-API_PID=$!
-echo "✓ API 服务器已启动 (PID: $API_PID)"
+# 启动 Timeline 服务器
+python3 trendradar/timeline_server.py --db data/trendradar.db &
+TIMELINE_PID=$!
+echo "✓ Timeline 服务器已启动 (PID: $TIMELINE_PID)"
 
-# 等待 API 服务器启动
+# 等待启动
 sleep 2
+
+# 检查是否成功
+if ! kill -0 $TIMELINE_PID 2>/dev/null; then
+    echo "❌ Timeline 服务器启动失败"
+    exit 1
+fi
 
 echo ""
 echo "步骤 5/5: 启动前端开发服务器..."
@@ -94,13 +100,13 @@ echo ""
 echo "╔════════════════════════════════════════════════════════╗"
 echo "║                   🎉 启动成功！                        ║"
 echo "╠════════════════════════════════════════════════════════╣"
-echo "║  API 服务器：  http://localhost:8001                  ║"
-echo "║  前端页面：   http://localhost:3000                   ║"
+echo "║  Timeline API:   http://0.0.0.0:8001                  ║"
+echo "║  前端页面：     http://0.0.0.0:5173                   ║"
 echo "║                                                        ║"
 echo "║  按 Ctrl+C 停止所有服务                                ║"
 echo "╚════════════════════════════════════════════════════════╝"
 echo ""
 
 # 等待用户中断
-trap "kill $API_PID $FRONTEND_PID 2>/dev/null" EXIT
+trap "kill $TIMELINE_PID $FRONTEND_PID 2>/dev/null" EXIT
 wait
