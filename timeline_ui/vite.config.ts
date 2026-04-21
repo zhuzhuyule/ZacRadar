@@ -15,7 +15,7 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: 3000,
+    port: 3456,
     host: '0.0.0.0',
     allowedHosts: ['.monkeycode-ai.online'],
     proxy: {
