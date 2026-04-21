@@ -118,7 +118,7 @@ class DataFetcher:
         self,
         ids_list: List[Union[str, Tuple[str, str]]],
         request_interval: int = 100,
-    ) -> Tuple[Dict, Dict, List]:
+    ) -> Tuple[Dict, Dict, List, Dict]:
         """
         爬取多个网站数据
 
@@ -127,11 +127,15 @@ class DataFetcher:
             request_interval: 请求间隔（毫秒）
 
         Returns:
-            (结果字典, ID到名称的映射, 失败ID列表) 元组
+            (结果字典, ID到名称的映射, 失败ID列表, 平台元数据字典) 元组
+
+            平台元数据字典格式: {source_id: {"updated_time_ms": int}}
+            每条新闻字典追加字段: description, hot_value, icon_url, upstream_id
         """
         results = {}
         id_to_name = {}
         failed_ids = []
+        source_meta: Dict[str, Dict] = {}
 
         for i, id_info in enumerate(ids_list):
             if isinstance(id_info, tuple):
@@ -147,6 +151,9 @@ class DataFetcher:
                 try:
                     data = json.loads(response)
                     results[id_value] = {}
+                    updated_time_ms = data.get("updatedTime")
+                    if isinstance(updated_time_ms, (int, float)):
+                        source_meta[id_value] = {"updated_time_ms": int(updated_time_ms)}
 
                     for index, item in enumerate(data.get("items", []), 1):
                         title = item.get("title")
@@ -156,6 +163,26 @@ class DataFetcher:
                         title = str(title).strip()
                         url = item.get("url", "")
                         mobile_url = item.get("mobileUrl", "")
+                        upstream_id = str(item.get("id") or "")
+
+                        # extra 字段抽取（不同平台结构不同，兼容处理）
+                        extra = item.get("extra") or {}
+                        description = ""
+                        hot_value = ""
+                        icon_url = ""
+                        if isinstance(extra, dict):
+                            # 描述：优先 hover（知乎/百度长摘要），回退到 date
+                            description = str(extra.get("hover") or "").strip()
+                            if not description:
+                                description = str(extra.get("date") or "").strip()
+                            # 热度值：info 字段（如"502 万热度"）
+                            hot_value = str(extra.get("info") or "").strip()
+                            # 图标：微博是 dict {url, scale}，其它是字符串
+                            icon_raw = extra.get("icon")
+                            if isinstance(icon_raw, dict):
+                                icon_url = str(icon_raw.get("url") or "")
+                            elif isinstance(icon_raw, str):
+                                icon_url = icon_raw
 
                         if title in results[id_value]:
                             results[id_value][title]["ranks"].append(index)
@@ -164,6 +191,10 @@ class DataFetcher:
                                 "ranks": [index],
                                 "url": url,
                                 "mobileUrl": mobile_url,
+                                "description": description,
+                                "hot_value": hot_value,
+                                "icon_url": icon_url,
+                                "upstream_id": upstream_id,
                             }
                 except json.JSONDecodeError:
                     print(f"解析 {id_value} 响应失败")
@@ -181,4 +212,4 @@ class DataFetcher:
                 time.sleep(actual_interval / 1000)
 
         print(f"成功: {list(results.keys())}, 失败: {failed_ids}")
-        return results, id_to_name, failed_ids
+        return results, id_to_name, failed_ids, source_meta

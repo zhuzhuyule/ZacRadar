@@ -96,6 +96,22 @@ class SQLiteStorageMixin:
                 with open(ai_filter_schema, "r", encoding="utf-8") as f:
                     conn.executescript(f.read())
 
+        # 旧库迁移：补齐 news_items 新字段（SQLite 不支持 IF NOT EXISTS 的 ALTER ADD COLUMN）
+        if db_type == "news":
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA table_info(news_items)")
+            existing_cols = {row[1] for row in cursor.fetchall()}
+            migrations = [
+                ("description", "TEXT DEFAULT ''"),
+                ("hot_value", "TEXT DEFAULT ''"),
+                ("icon_url", "TEXT DEFAULT ''"),
+                ("upstream_id", "TEXT DEFAULT ''"),
+                ("source_updated_ts", "INTEGER DEFAULT 0"),
+            ]
+            for col, col_def in migrations:
+                if col not in existing_cols:
+                    cursor.execute(f"ALTER TABLE news_items ADD COLUMN {col} {col_def}")
+
         conn.commit()
 
     # ========================================
@@ -173,7 +189,7 @@ class SQLiteStorageMixin:
                                     VALUES (?, ?, ?, ?)
                                 """, (existing_id, item.rank, data.crawl_time, now_str))
 
-                                # 更新现有记录
+                                # 更新现有记录（元数据若非空则覆盖，空则保留旧值）
                                 cursor.execute("""
                                     UPDATE news_items SET
                                         title = ?,
@@ -181,10 +197,21 @@ class SQLiteStorageMixin:
                                         mobile_url = ?,
                                         last_crawl_time = ?,
                                         crawl_count = crawl_count + 1,
+                                        description = CASE WHEN ? != '' THEN ? ELSE description END,
+                                        hot_value = CASE WHEN ? != '' THEN ? ELSE hot_value END,
+                                        icon_url = CASE WHEN ? != '' THEN ? ELSE icon_url END,
+                                        upstream_id = CASE WHEN ? != '' THEN ? ELSE upstream_id END,
+                                        source_updated_ts = CASE WHEN ? > 0 THEN ? ELSE source_updated_ts END,
                                         updated_at = ?
                                     WHERE id = ?
                                 """, (item.title, item.rank, item.mobile_url,
-                                      data.crawl_time, now_str, existing_id))
+                                      data.crawl_time,
+                                      item.description, item.description,
+                                      item.hot_value, item.hot_value,
+                                      item.icon_url, item.icon_url,
+                                      item.upstream_id, item.upstream_id,
+                                      item.source_updated_ts, item.source_updated_ts,
+                                      now_str, existing_id))
                                 updated_count += 1
                             else:
                                 # 不存在，插入新记录（存储标准化后的 URL）
@@ -192,10 +219,13 @@ class SQLiteStorageMixin:
                                     INSERT INTO news_items
                                     (title, platform_id, rank, url, mobile_url,
                                      first_crawl_time, last_crawl_time, crawl_count,
+                                     description, hot_value, icon_url, upstream_id, source_updated_ts,
                                      created_at, updated_at)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)
                                 """, (item.title, source_id, item.rank, normalized_url,
                                       item.mobile_url, data.crawl_time, data.crawl_time,
+                                      item.description, item.hot_value, item.icon_url,
+                                      item.upstream_id, item.source_updated_ts,
                                       now_str, now_str))
                                 new_id = cursor.lastrowid
                                 # 记录初始排名
@@ -211,10 +241,13 @@ class SQLiteStorageMixin:
                                 INSERT INTO news_items
                                 (title, platform_id, rank, url, mobile_url,
                                  first_crawl_time, last_crawl_time, crawl_count,
+                                 description, hot_value, icon_url, upstream_id, source_updated_ts,
                                  created_at, updated_at)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)
                             """, (item.title, source_id, item.rank, "",
                                   item.mobile_url, data.crawl_time, data.crawl_time,
+                                  item.description, item.hot_value, item.icon_url,
+                                  item.upstream_id, item.source_updated_ts,
                                   now_str, now_str))
                             new_id = cursor.lastrowid
                             # 记录初始排名

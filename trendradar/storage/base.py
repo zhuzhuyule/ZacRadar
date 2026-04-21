@@ -31,6 +31,13 @@ class NewsItem:
                                         # 格式: [{"time": "09:30", "rank": 1}, {"time": "10:00", "rank": 2}, ...]
                                         # None 表示脱榜: [{"time": "11:00", "rank": None}]
 
+    # 上游元数据（来自 newsnow API）
+    description: str = ""               # 描述/摘要（extra.hover）
+    hot_value: str = ""                 # 热度文本（extra.info，如"502 万热度"）
+    icon_url: str = ""                  # 平台图标 URL（extra.icon）
+    upstream_id: str = ""               # 上游稳定 ID
+    source_updated_ts: int = 0          # 平台榜单更新时间（毫秒级 Unix 时间戳）
+
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
         return {
@@ -46,6 +53,11 @@ class NewsItem:
             "last_time": self.last_time,
             "count": self.count,
             "rank_timeline": self.rank_timeline,
+            "description": self.description,
+            "hot_value": self.hot_value,
+            "icon_url": self.icon_url,
+            "upstream_id": self.upstream_id,
+            "source_updated_ts": self.source_updated_ts,
         }
 
     @classmethod
@@ -64,6 +76,11 @@ class NewsItem:
             last_time=data.get("last_time", ""),
             count=data.get("count", 1),
             rank_timeline=data.get("rank_timeline", []),
+            description=data.get("description", ""),
+            hot_value=data.get("hot_value", ""),
+            icon_url=data.get("icon_url", ""),
+            upstream_id=data.get("upstream_id", ""),
+            source_updated_ts=data.get("source_updated_ts", 0),
         )
 
 
@@ -532,25 +549,29 @@ def convert_crawl_results_to_news_data(
     failed_ids: List[str],
     crawl_time: str,
     crawl_date: str,
+    source_meta: Optional[Dict[str, Dict]] = None,
 ) -> NewsData:
     """
     将爬虫结果转换为 NewsData 格式
 
     Args:
-        results: 爬虫返回的结果 {source_id: {title: {ranks: [], url: "", mobileUrl: ""}}}
+        results: 爬虫返回的结果 {source_id: {title: {ranks, url, mobileUrl, description, hot_value, icon_url, upstream_id}}}
         id_to_name: 来源ID到名称的映射
         failed_ids: 失败的来源ID
         crawl_time: 抓取时间（HH:MM）
         crawl_date: 抓取日期（YYYY-MM-DD）
+        source_meta: 平台元数据 {source_id: {"updated_time_ms": int}}
 
     Returns:
         NewsData 对象
     """
     items = {}
+    source_meta = source_meta or {}
 
     for source_id, titles_data in results.items():
         source_name = id_to_name.get(source_id, source_id)
         news_list = []
+        updated_ts = int(source_meta.get(source_id, {}).get("updated_time_ms") or 0)
 
         for title, data in titles_data.items():
             ranks = data.get("ranks", [])
@@ -571,6 +592,11 @@ def convert_crawl_results_to_news_data(
                 first_time=crawl_time,
                 last_time=crawl_time,
                 count=1,
+                description=data.get("description", "") or "",
+                hot_value=data.get("hot_value", "") or "",
+                icon_url=data.get("icon_url", "") or "",
+                upstream_id=data.get("upstream_id", "") or "",
+                source_updated_ts=updated_ts,
             )
             news_list.append(news_item)
 

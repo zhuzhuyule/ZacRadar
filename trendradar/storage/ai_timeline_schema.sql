@@ -127,8 +127,9 @@ CREATE INDEX IF NOT EXISTS idx_analysis_history_started ON ai_analysis_history(s
 -- ============================================
 -- 视图：完整的新闻数据（包含 AI 分析结果）
 -- ============================================
-CREATE VIEW IF NOT EXISTS v_news_full AS
-SELECT 
+DROP VIEW IF EXISTS v_news_full;
+CREATE VIEW v_news_full AS
+SELECT
     ni.id,
     ni.title,
     ni.platform_id,
@@ -140,6 +141,12 @@ SELECT
     ni.crawl_count,
     ni.created_at,
     ni.updated_at,
+    ni.description,
+    ni.hot_value,
+    ni.icon_url,
+    ni.upstream_id,
+    ni.source_updated_ts,
+    COALESCE(ni.title_zh, '') as title_zh,
     
     -- AI 标签（JSON 数组）
     (

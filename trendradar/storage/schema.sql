@@ -25,6 +25,12 @@ CREATE TABLE IF NOT EXISTS news_items (
     first_crawl_time TEXT NOT NULL,      -- 首次抓取时间
     last_crawl_time TEXT NOT NULL,       -- 最后抓取时间
     crawl_count INTEGER DEFAULT 1,       -- 抓取次数
+    -- 上游元数据（来自 newsnow API）
+    description TEXT DEFAULT '',         -- 描述/摘要（extra.hover）
+    hot_value TEXT DEFAULT '',           -- 热度文本（extra.info）
+    icon_url TEXT DEFAULT '',            -- 平台图标/徽章 URL（extra.icon）
+    upstream_id TEXT DEFAULT '',         -- 上游稳定 ID
+    source_updated_ts INTEGER DEFAULT 0, -- 平台榜单更新时间（Unix ms）
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (platform_id) REFERENCES platforms(id)
