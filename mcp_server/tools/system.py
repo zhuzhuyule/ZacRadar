@@ -230,7 +230,7 @@ class SystemManagementTools:
             proxy_url = crawler_config.get("default_proxy") if crawler_config.get("use_proxy") else None
 
             fetcher = DataFetcher(proxy_url=proxy_url)
-            results, id_to_name, failed_ids = fetcher.crawl_websites(
+            results, id_to_name, failed_ids, source_meta = fetcher.crawl_websites(
                 ids_list=ids,
                 request_interval=crawler_config.get("request_interval", 100)
             )
@@ -243,7 +243,8 @@ class SystemManagementTools:
 
             news_data = convert_crawl_results_to_news_data(
                 results=results, id_to_name=id_to_name,
-                failed_ids=failed_ids, crawl_time=crawl_time_str, crawl_date=crawl_date
+                failed_ids=failed_ids, crawl_time=crawl_time_str, crawl_date=crawl_date,
+                source_meta=source_meta,
             )
 
             storage = LocalStorageBackend(
