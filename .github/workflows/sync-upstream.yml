@@ -1,0 +1,139 @@
+name: Sync upstream & rebase myself
+
+on:
+  schedule:
+    # 每天 UTC 20:00（北京时间次日 04:00）
+    - cron: "0 20 * * *"
+  workflow_dispatch:
+    inputs:
+      force_push:
+        description: "Force-push myself after rebase (otherwise只提 PR)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+env:
+  UPSTREAM_REPO: https://github.com/sansan0/TrendRadar.git
+  UPSTREAM_BRANCH: master
+  FORK_BRANCH: master
+  WORK_BRANCH: myself
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ env.WORK_BRANCH }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream "$UPSTREAM_REPO" || git remote set-url upstream "$UPSTREAM_REPO"
+          git fetch upstream --tags
+
+      - name: Fast-forward origin/master ← upstream/master
+        id: ff_master
+        run: |
+          git checkout "$FORK_BRANCH"
+          BEFORE=$(git rev-parse HEAD)
+          if git merge --ff-only "upstream/$UPSTREAM_BRANCH"; then
+            AFTER=$(git rev-parse HEAD)
+            if [ "$BEFORE" = "$AFTER" ]; then
+              echo "master_changed=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::upstream/master unchanged, nothing to do"
+            else
+              echo "master_changed=true" >> "$GITHUB_OUTPUT"
+              NEW_COMMITS=$(git log --oneline "$BEFORE..$AFTER" | head -30)
+              echo "new_commits<<EOF" >> "$GITHUB_OUTPUT"
+              echo "$NEW_COMMITS" >> "$GITHUB_OUTPUT"
+              echo "EOF" >> "$GITHUB_OUTPUT"
+              git push origin "$FORK_BRANCH"
+            fi
+          else
+            echo "::error::Cannot fast-forward $FORK_BRANCH — it has diverged from upstream/$UPSTREAM_BRANCH"
+            exit 1
+          fi
+
+      - name: Rebase myself onto master
+        id: rebase
+        if: steps.ff_master.outputs.master_changed == 'true'
+        run: |
+          git checkout "$WORK_BRANCH"
+          if git rebase "$FORK_BRANCH"; then
+            echo "rebased=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Rebase clean"
+          else
+            git rebase --abort
+            echo "rebased=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Rebase conflicts — manual intervention required"
+          fi
+
+      - name: Push myself (force-with-lease)
+        if: steps.rebase.outputs.rebased == 'true' && (github.event_name == 'schedule' || inputs.force_push)
+        run: |
+          git push --force-with-lease origin "$WORK_BRANCH"
+
+      - name: Open issue on rebase conflict
+        if: steps.rebase.outputs.rebased == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = [
+              '## ⚠️ Upstream sync: rebase conflict',
+              '',
+              `\`origin/${process.env.FORK_BRANCH}\` was fast-forwarded to \`upstream/${process.env.UPSTREAM_BRANCH}\` successfully, `,
+              `but rebasing \`${process.env.WORK_BRANCH}\` onto it hit conflicts.`,
+              '',
+              '### New upstream commits',
+              '```',
+              `${{ steps.ff_master.outputs.new_commits }}`,
+              '```',
+              '',
+              '### To resolve locally',
+              '```bash',
+              'git fetch origin',
+              `git checkout ${process.env.WORK_BRANCH}`,
+              `git rebase origin/${process.env.FORK_BRANCH}`,
+              '# resolve conflicts, then:',
+              `git push --force-with-lease origin ${process.env.WORK_BRANCH}`,
+              '```',
+            ].join('\n');
+            const title = `[sync] Rebase conflict with upstream (${new Date().toISOString().slice(0,10)})`;
+            const { data: existing } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', labels: 'upstream-sync',
+            });
+            if (existing.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: existing[0].number, body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title, body, labels: ['upstream-sync'],
+              });
+            }
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Upstream sync result"
+            echo ""
+            echo "- upstream: \`$UPSTREAM_REPO#$UPSTREAM_BRANCH\`"
+            echo "- master changed: ${{ steps.ff_master.outputs.master_changed || 'n/a' }}"
+            echo "- rebased: ${{ steps.rebase.outputs.rebased || 'skipped' }}"
+          } >> "$GITHUB_STEP_SUMMARY"
